@@ -1,0 +1,11 @@
+services:
+  collectionblockarr:
+    image: python:3.11-slim
+    container_name: CollectionBlockarr
+    restart: unless-stopped
+    working_dir: /app
+    command: python3 /app/collection_killer.py
+    ports:
+      - "8099:8099"
+    volumes:
+      - ./:/app

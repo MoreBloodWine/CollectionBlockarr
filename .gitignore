@@ -1,0 +1,5 @@
+config.json
+blacklist.json
+backups/
+*.zip
+__pycache__/
