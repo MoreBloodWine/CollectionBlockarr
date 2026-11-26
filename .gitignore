@@ -3,3 +3,4 @@ blacklist.json
 backups/
 *.zip
 __pycache__/
+CHEATSHEET.txt
