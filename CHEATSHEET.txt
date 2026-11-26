@@ -1,0 +1,23 @@
+================================================================
+CollectionBlockarr — Permanent NAS Git & Patch Cheatsheet
+================================================================
+
+1. FIRST-TIME PUSH TO GITHUB (Create an empty repo named "CollectionBlockarr" on GitHub first, then replace YOUR_GITHUB_USER and YOUR_TOKEN below):
+docker run --rm --entrypoint sh -v /volume1/docker/CollectionBlockarr-git:/repo -w /repo alpine/git -c 'git remote add origin https://github.com && git push -u origin main'
+
+2. PUSH ANY FUTURE UPDATE TO GITHUB (After live-patching /volume1/docker/jellyfinht/collection_killer.py):
+cp /volume1/docker/jellyfinht/collection_killer.py /volume1/docker/CollectionBlockarr-git/ && docker run --rm --entrypoint sh -v /volume1/docker/CollectionBlockarr-git:/repo -w /repo alpine/git -c 'git add collection_killer.py && git commit -m "Update" && git push'
+
+3. REBUILD CLEAN STANDALONE ZIP ANYTIME:
+python3 -c '
+import zipfile
+with zipfile.ZipFile("/volume1/docker/jellyfinht/CollectionBlockarr-release.zip", "w", zipfile.ZIP_DEFLATED) as zf:
+    zf.write("/volume1/docker/CollectionBlockarr-git/collection_killer.py", "CollectionBlockarr/collection_killer.py")
+    zf.write("/volume1/docker/CollectionBlockarr-git/docker-compose.yml", "CollectionBlockarr/docker-compose.yml")
+    zf.write("/volume1/docker/CollectionBlockarr-git/README.md", "CollectionBlockarr/README.md")
+print("Clean release ZIP built OK")
+'
+
+4. STARTING A NEW AI TAB LATER FOR FUTURE PATCHES:
+Upload /volume1/docker/jellyfinht/collection_killer.py (or the latest ZIP) into a fresh tab and state what you want changed.
+================================================================
