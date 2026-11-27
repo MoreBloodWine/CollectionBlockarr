@@ -370,13 +370,18 @@ class Handler(BaseHTTPRequestHandler):
 </form>
 </div>
 </div>
-<div id="cl-modal" class="modal-bg" style="display:none" onclick="if(event.target===this)toggleChangelog()">
-<div class="modal-box" style="max-width:560px">
-<button type="button" class="modal-close" onclick="toggleChangelog()" title="Close">&times;</button>
+<div id="cl-modal" class="modal-bg" style="display:none" onclick="if(event.target===this){{renderClPage(1);toggleChangelog()}}">
+<div class="modal-box" style="max-width:680px">
+<button type="button" class="modal-close" onclick="renderClPage(1);toggleChangelog()" title="Close">&times;</button>
 <h2 style="color:#00a4dc;font-size:1.15rem;margin-bottom:12px">Changelog</h2>
-<div style="font-size:.85rem;line-height:1.6;color:#ccc;max-height:360px;overflow-y:auto;padding-right:4px">
-<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a2a2a"><strong style="color:#fff">v1.0.1</strong> <span style="color:#777;font-size:.78rem">(2026-11-27)</span><br>&bull; Added background sweep thread (every 60s) with thread-safe sweep lock so scheduled Jellyfin scans never leave blocked collections behind.<br>&bull; Fixed missing <code>threading</code> / <code>_retry_timer</code> crash in 5-minute health retest.<br>&bull; Added in-app Changelog modal and direct GitHub link in top bar.</div>
-<div><strong style="color:#fff">v1.0.0</strong> <span style="color:#777;font-size:.78rem">(2026-11-26)</span><br>&bull; Initial release: Jellyfin BoxSet blocking, <code>TmdbCollection</code> stripping, instant JSON restore snapshots, real-time webhook interception, health checks, and full-state export/import.</div>
+<div id="cl-list" style="font-size:.86rem;line-height:1.6;color:#ccc;min-height:295px">
+<div class="cl-entry" style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a2a2a"><strong style="color:#fff">v1.0.1</strong> <span style="color:#777;font-size:.78rem">(2026-11-27)</span><br>&bull; Added background sweep thread (every 60s) with thread-safe sweep lock so scheduled Jellyfin scans never leave blocked collections behind.<br>&bull; Fixed missing <code>threading</code> / <code>_retry_timer</code> crash in 5-minute health retest.<br>&bull; Added in-app Changelog modal and direct GitHub link in top bar.</div>
+<div class="cl-entry" style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a2a2a"><strong style="color:#fff">v1.0.0</strong> <span style="color:#777;font-size:.78rem">(2026-11-26)</span><br>&bull; Initial release: Jellyfin BoxSet blocking, <code>TmdbCollection</code> stripping, instant JSON restore snapshots, real-time webhook interception, health checks, and full-state export/import.</div>
+</div>
+<div id="cl-pager" style="display:none;justify-content:space-between;align-items:center;margin-top:16px;padding-top:12px;border-top:1px solid #262626">
+<button type="button" id="cl-prev" class="settings-toggle" onclick="renderClPage(clPage-1)">&larr; Previous</button>
+<span id="cl-info" style="font-size:.8rem;color:#888"></span>
+<button type="button" id="cl-next" class="settings-toggle" onclick="renderClPage(clPage+1)">Next &rarr;</button>
 </div>
 </div>
 </div>
@@ -423,7 +428,7 @@ document.addEventListener("keydown",function(e){{
 <div class="card"><form method="POST" action="/add"><label for="selected">Select Existing Jellyfin Collection ({len(existing):,})</label><select id="selected" name="selected">{options}</select><input type="text" id="manual" name="manual" placeholder="Or type collection name manually to begin searching..." oninput="filterList()"><button type="submit" class="btn-primary">Block &amp; Clean</button></form></div>
 <div class="list-section"><div class="list-title">Blocked Collections ({total:,})</div>{rows}<div class="pagination"><a href="/?page={page-1}" class="{prev_cls}">&larr; Previous</a><span class="page-info">Page {page:,} of {total_pages:,}</span><a href="/?page={page+1}" class="{next_cls}">Next &rarr;</a></div></div>
 <script>
-if(window.location.search)window.history.replaceState(null,"","/");function toggleChangelog(){{var m=document.getElementById("cl-modal");m.style.display=m.style.display==="flex"?"none":"flex";}}function toggleAbout(){{var m=document.getElementById("about-modal");m.style.display=m.style.display==="flex"?"none":"flex";}}function toggleSettings(){{const p=document.getElementById("settings-panel");p.style.display=p.style.display==="block"?"none":"block"}}
+if(window.location.search)window.history.replaceState(null,"","/");var clPage=1,CL_PER_PAGE=5;function renderClPage(p){{var items=document.querySelectorAll("#cl-list .cl-entry"),tot=Math.max(1,Math.ceil(items.length/CL_PER_PAGE));clPage=Math.max(1,Math.min(p,tot));var s=(clPage-1)*CL_PER_PAGE,e=s+CL_PER_PAGE;var last=Math.min(e,items.length)-1;items.forEach(function(el,i){{var show=(i>=s&&i<e);el.style.display=show?"block":"none";if(show){{el.style.borderBottom=(i===last)?"none":"1px solid #2a2a2a";el.style.marginBottom=(i===last)?"0":"14px";el.style.paddingBottom=(i===last)?"0":"12px";}}}});var pg=document.getElementById("cl-pager");if(tot>1){{pg.style.display="flex";document.getElementById("cl-info").textContent="Page "+clPage+" of "+tot;document.getElementById("cl-prev").disabled=(clPage<=1);document.getElementById("cl-next").disabled=(clPage>=tot);}}else{{pg.style.display="none";}}}}function toggleChangelog(){{var m=document.getElementById("cl-modal");var open=m.style.display==="flex";m.style.display=open?"none":"flex";if(!open)renderClPage(1);}}function toggleAbout(){{var m=document.getElementById("about-modal");m.style.display=m.style.display==="flex"?"none":"flex";}}function toggleSettings(){{const p=document.getElementById("settings-panel");p.style.display=p.style.display==="block"?"none":"block"}}
 const ALL_OPTS=Array.from(document.getElementById("selected").options).slice(1).map(o=>({{v:o.value,t:o.text}}));
 function filterList(){{const q=document.getElementById("manual").value.toLowerCase();const s=document.getElementById("selected");const m=ALL_OPTS.filter(o=>o.t.toLowerCase().includes(q));s.innerHTML='<option value="">--- Choose a collection ---</option>'+m.map(o=>`<option value="${{o.v.replace(/"/g,"&quot;")}}">${{o.t}}</option>`).join("");if(q&&m.length===1)s.selectedIndex=1;}}
 </script>
