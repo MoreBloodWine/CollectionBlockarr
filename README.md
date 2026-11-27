@@ -35,6 +35,12 @@ docker compose up -d
    - **Send All Properties:** Enabled
 3. Click **Test** in CollectionBlockarr's top status bar to confirm all health pills read green.
 
+## Changelog
+See [CHANGELOG.md](CHANGELOG.md) for full release history.
+
+- **v1.0.1 (2026-11-27):** Added 60s background sweep thread, fixed 5-minute health retest timer crash, and added in-app Changelog modal + GitHub link.
+- **v1.0.0 (2026-11-26):** Initial release.
+
 ---
 
 *Conceived, directed, and battle-tested on a live home NAS by **MoreBloodWine** — built and refined in collaboration with **Gemini** (Google AI).*
