@@ -1,5 +1,7 @@
-VERSION = "v1.0.0"
-import os, json, html, math, hashlib, urllib.request, urllib.parse
+VERSION = "v1.0.1"
+import os, json, html, math, time, hashlib, threading, urllib.request, urllib.parse
+_retry_timer = None
+_sweep_lock = threading.Lock()
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from http.cookies import SimpleCookie
 
@@ -120,8 +122,10 @@ def restore_collection(n):
   os.remove(sp);print(f"Restored: {n}",flush=True)
  except Exception as e:print(f"Restore error: {e}",flush=True)
 def clean_collections():
- bl=load_list()
+ if not _sweep_lock.acquire(blocking=False): return
  try:
+  bl=load_list()
+  if not bl: return
   uid=next(u["Id"] for u in api("/Users") if u.get("Policy",{}).get("IsAdministrator"))
   for box in api("/Items?IncludeItemTypes=BoxSet&Recursive=true").get("Items",[]):
    if box["Name"] in bl:
@@ -130,10 +134,13 @@ def clean_collections():
      cid=ch["Id"];cids.append(cid);it=api(f"/Users/{uid}/Items/{cid}");pd=it.get("ProviderIds",{})
      if "TmdbCollection" in pd:
       if not tm:tm=pd["TmdbCollection"]
-      del pd["TmdbCollection"];it["ProviderIds"]=pd;api(f"/Items/{cid}",method="POST",data=it)
+      del pd["TmdbCollection"]
+     it["ProviderIds"]=pd;api(f"/Items/{cid}",method="POST",data=it)
     if cids and not os.path.exists(_snap_path(box["Name"])):json.dump({"name":box["Name"],"ids":cids,"tmdb_id":tm},open(_snap_path(box["Name"]),"w"),indent=2)
     api(f"/Items/{bid}",method="DELETE");print(f"Deleted: {box['Name']}",flush=True)
  except Exception as e:print(f"Cleanup error: {e}",flush=True)
+ finally:
+  _sweep_lock.release()
 
 def schedule_retest():
     global _retry_timer
@@ -336,9 +343,9 @@ class Handler(BaseHTTPRequestHandler):
         logout_btn = '<a href="/logout" class="settings-toggle" style="text-decoration:none">Logout</a>' if (AUTH_USER and get_auth_pass()) else ""
 
         page_html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="icon" type="image/png" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAmUlEQVR4nO3WwQ2AIAwFUKZgX3ZxLEcx0YsmDdHaT/vh0kOP5L/QllBqrefKKglIADvgaG0MULZ9uGT4MsAT7gZA/bzPWMMpACQ8HICGwwCt7zJcG0wK4C88HIBcOxVg6TkNYN5zBgDa82gAvOdewNe0W8JDASPhLoCsfs+nAt4emWmA/tqXAbTBRD8pMEAbTDpgRiUgAQm4ABKAHFeilajbAAAAAElFTkSuQmCC"><title>CollectionBlockarr</title>
-<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#101010;color:#f0f0f0;display:flex;flex-direction:column;align-items:center;padding:40px 16px}}.topbar{{width:100%;max-width:580px;display:flex;justify-content:space-between;align-items:center;margin-bottom:24px}}h1{{color:#00a4dc;font-size:2rem;font-weight:700}}.top-actions{{display:flex;gap:8px}}.settings-toggle{{background:#1c1c1c;color:#aaa;border:1px solid #2e2e2e;border-radius:6px;padding:6px 12px;font-size:.8rem;cursor:pointer}}.settings-toggle:hover{{color:#fff;border-color:#00a4dc}}.status-bar{{width:100%;max-width:580px;display:flex;flex-direction:column;background:#161616;border:1px solid #262626;border-radius:8px;padding:10px 12px;margin-bottom:16px;gap:8px}}.status-top{{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px}}.pills{{display:flex;flex-wrap:wrap;gap:6px}}.pill{{font-size:.75rem;font-weight:600;padding:3px 8px;border-radius:5px}}.pill.ok{{background:#152e20;color:#68d391;border:1px solid #276749}}.pill.bad{{background:#361818;color:#fc8181;border:1px solid #742a2a}}.pill.idle{{background:#222;color:#888;border:1px solid #333}}.btn-test{{background:#242424;color:#00a4dc;border:1px solid #333;border-radius:5px;padding:4px 10px;font-size:.75rem;font-weight:600;text-decoration:none;white-space:nowrap}}.btn-test:hover{{background:#2e2e2e}}.settings-panel{{display:{panel_display};background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:14px;width:100%;max-width:580px;margin-bottom:18px}}.settings-row{{display:flex;gap:8px}}.settings-row input{{margin-bottom:0;padding:8px 12px;font-size:.85rem}}.btn-save{{background:#2b2b2b;color:#00a4dc;border:1px solid #3a3a3a;border-radius:6px;padding:8px 14px;font-size:.85rem;font-weight:600;cursor:pointer}}.toast{{width:100%;max-width:580px;background:#163020;border:1px solid #276749;color:#9ae6b4;padding:8px 14px;border-radius:6px;font-size:.85rem;margin-bottom:16px;text-align:center}}.warn{{width:100%;max-width:580px;background:#362912;border:1px solid #744210;color:#fbd38d;padding:8px 14px;border-radius:6px;font-size:.85rem;margin-bottom:16px;text-align:center}}.card{{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:10px;padding:22px;width:100%;max-width:580px;margin-bottom:32px}}label{{display:block;font-size:.9rem;color:#d0d0d0;margin-bottom:8px}}select,input[type="text"]{{width:100%;padding:11px 14px;border-radius:6px;border:1px solid #333;background:#141414;color:#d0d0d0;font-size:.9rem;margin-bottom:14px;outline:none}}select:focus,input[type="text"]:focus{{border-color:#00a4dc}}.btn-primary{{width:100%;padding:12px;border:none;border-radius:6px;background:#0095d5;color:#fff;font-size:1rem;font-weight:600;cursor:pointer}}.btn-primary:hover{{background:#00a4dc}}.list-section{{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:10px;padding:22px;width:100%;max-width:580px}}.list-title{{font-size:.9rem;font-weight:400;color:#d0d0d0;margin-bottom:14px}}.item-row{{display:flex;justify-content:space-between;align-items:center;background:#141414;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:.9rem;color:#d0d0d0}}.btn-remove{{background:#c94a4a;color:#fff;border:none;border-radius:5px;padding:7px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}}.empty{{color:#777;text-align:center;padding:20px;background:#141414;border-radius:8px}}.pagination{{display:flex;justify-content:space-between;align-items:center;margin-top:18px}}.page-btn{{background:#262626;color:#e0e0e0;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:.9rem;border:1px solid #333}}.page-btn.disabled{{background:#181818;color:#555;border-color:#222;pointer-events:none}}.page-info{{font-size:.9rem;color:#ccc}}.modal-bg{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:999;align-items:center;justify-content:center;padding:16px}}.modal-box{{background:#1c1c1c;border:1px solid #2e2e2e;border-radius:10px;max-width:520px;width:100%;padding:22px;position:relative;box-shadow:0 12px 32px rgba(0,0,0,.65)}}.modal-close{{position:absolute;top:14px;right:14px;background:#262626;color:#aaa;border:1px solid #333;border-radius:6px;width:28px;height:28px;font-size:1.1rem;line-height:1;cursor:pointer}}.modal-close:hover{{color:#fff;border-color:#00a4dc}}</style></head>
+<style>*{{box-sizing:border-box;margin:0;padding:0}}body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#101010;color:#f0f0f0;display:flex;flex-direction:column;align-items:center;padding:40px 16px}}.topbar{{width:100%;max-width:580px;display:flex;flex-direction:column;align-items:flex-start;gap:12px;margin-bottom:24px}}.top-actions{{display:flex;flex-wrap:wrap;gap:8px;width:100%}}h1{{color:#00a4dc;font-size:2rem;font-weight:700}}.top-actions{{display:flex;gap:8px}}.settings-toggle{{display:inline-flex;align-items:center;justify-content:center;font-family:inherit;line-height:1.2;display:inline-flex;align-items:center;justify-content:center;font-family:inherit;line-height:1.2;background:#1c1c1c;color:#aaa;border:1px solid #2e2e2e;border-radius:6px;padding:6px 12px;font-size:.8rem;cursor:pointer;text-decoration:none;text-decoration:none}}.settings-toggle:hover{{color:#fff;border-color:#00a4dc}}.status-bar{{width:100%;max-width:580px;display:flex;flex-direction:column;background:#161616;border:1px solid #262626;border-radius:8px;padding:10px 12px;margin-bottom:16px;gap:8px}}.status-top{{width:100%;display:flex;justify-content:space-between;align-items:center;gap:8px}}.pills{{display:flex;flex-wrap:wrap;gap:6px}}.pill{{font-size:.75rem;font-weight:600;padding:3px 8px;border-radius:5px}}.pill.ok{{background:#152e20;color:#68d391;border:1px solid #276749}}.pill.bad{{background:#361818;color:#fc8181;border:1px solid #742a2a}}.pill.idle{{background:#222;color:#888;border:1px solid #333}}.btn-test{{background:#242424;color:#00a4dc;border:1px solid #333;border-radius:5px;padding:4px 10px;font-size:.75rem;font-weight:600;text-decoration:none;white-space:nowrap}}.btn-test:hover{{background:#2e2e2e}}.settings-panel{{display:{panel_display};background:#181818;border:1px solid #2a2a2a;border-radius:8px;padding:14px;width:100%;max-width:580px;margin-bottom:18px}}.settings-row{{display:flex;gap:8px}}.settings-row input{{margin-bottom:0;padding:8px 12px;font-size:.85rem}}.btn-save{{background:#2b2b2b;color:#00a4dc;border:1px solid #3a3a3a;border-radius:6px;padding:8px 14px;font-size:.85rem;font-weight:600;cursor:pointer}}.toast{{width:100%;max-width:580px;background:#163020;border:1px solid #276749;color:#9ae6b4;padding:8px 14px;border-radius:6px;font-size:.85rem;margin-bottom:16px;text-align:center}}.warn{{width:100%;max-width:580px;background:#362912;border:1px solid #744210;color:#fbd38d;padding:8px 14px;border-radius:6px;font-size:.85rem;margin-bottom:16px;text-align:center}}.card{{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:10px;padding:22px;width:100%;max-width:580px;margin-bottom:32px}}label{{display:block;font-size:.9rem;color:#d0d0d0;margin-bottom:8px}}select,input[type="text"]{{width:100%;padding:11px 14px;border-radius:6px;border:1px solid #333;background:#141414;color:#d0d0d0;font-size:.9rem;margin-bottom:14px;outline:none}}select:focus,input[type="text"]:focus{{border-color:#00a4dc}}.btn-primary{{width:100%;padding:12px;border:none;border-radius:6px;background:#0095d5;color:#fff;font-size:1rem;font-weight:600;cursor:pointer}}.btn-primary:hover{{background:#00a4dc}}.list-section{{background:#1c1c1c;border:1px solid #2a2a2a;border-radius:10px;padding:22px;width:100%;max-width:580px}}.list-title{{font-size:.9rem;font-weight:400;color:#d0d0d0;margin-bottom:14px}}.item-row{{display:flex;justify-content:space-between;align-items:center;background:#141414;border:1px solid #2a2a2a;border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:.9rem;color:#d0d0d0}}.btn-remove{{background:#c94a4a;color:#fff;border:none;border-radius:5px;padding:7px 10px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}}.empty{{color:#777;text-align:center;padding:20px;background:#141414;border-radius:8px}}.pagination{{display:flex;justify-content:space-between;align-items:center;margin-top:18px}}.page-btn{{background:#262626;color:#e0e0e0;text-decoration:none;padding:8px 16px;border-radius:6px;font-size:.9rem;border:1px solid #333}}.page-btn.disabled{{background:#181818;color:#555;border-color:#222;pointer-events:none}}.page-info{{font-size:.9rem;color:#ccc}}.modal-bg{{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:999;align-items:center;justify-content:center;padding:16px}}.modal-box{{background:#1c1c1c;border:1px solid #2e2e2e;border-radius:10px;max-width:520px;width:100%;padding:22px;position:relative;box-shadow:0 12px 32px rgba(0,0,0,.65)}}.modal-close{{position:absolute;top:14px;right:14px;background:#262626;color:#aaa;border:1px solid #333;border-radius:6px;width:28px;height:28px;font-size:1.1rem;line-height:1;cursor:pointer}}.modal-close:hover{{color:#fff;border-color:#00a4dc}}</style></head>
 <body>
-<div class="topbar"><h1>CollectionBlockarr <span style="font-size:.72rem;font-weight:500;color:#777;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:5px;padding:2px 7px;vertical-align:middle;margin-left:6px">{VERSION}</span></h1><div class="top-actions"><button type="button" class="settings-toggle" onclick="toggleAbout()">About</button><button type="button" class="settings-toggle" onclick="toggleSettings()">Settings</button>{logout_btn}</div></div>
+<div class="topbar"><h1>CollectionBlockarr <span style="font-size:.72rem;font-weight:500;color:#777;background:#1c1c1c;border:1px solid #2e2e2e;border-radius:5px;padding:2px 7px;vertical-align:middle;margin-left:6px">{VERSION}</span></h1><div class="top-actions"><a href="https://github.com/MoreBloodWine/CollectionBlockarr" target="_blank" rel="noopener" class="settings-toggle" style="text-decoration:none">GitHub</a><button type="button" class="settings-toggle" onclick="toggleChangelog()">Changelog</button><button type="button" class="settings-toggle" onclick="toggleAbout()">About</button><button type="button" class="settings-toggle" onclick="toggleSettings()">Settings</button>{logout_btn}</div></div>
 {status_bar}
 <div id="settings-panel" class="settings-panel">
 <form method="POST" action="/settings" style="margin:0">
@@ -361,6 +368,16 @@ class Handler(BaseHTTPRequestHandler):
 <textarea id="imp-ta" name="import_json" rows="3" placeholder='Paste collectionblockarr-backup.json (or legacy blacklist array)' style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #333;background:#141414;color:#d0d0d0;font-size:.8rem;margin-bottom:8px;outline:none"></textarea>
 <button type="submit" class="btn-save" style="width:100%">Import &amp; Merge</button>
 </form>
+</div>
+</div>
+<div id="cl-modal" class="modal-bg" style="display:none" onclick="if(event.target===this)toggleChangelog()">
+<div class="modal-box" style="max-width:560px">
+<button type="button" class="modal-close" onclick="toggleChangelog()" title="Close">&times;</button>
+<h2 style="color:#00a4dc;font-size:1.15rem;margin-bottom:12px">Changelog</h2>
+<div style="font-size:.85rem;line-height:1.6;color:#ccc;max-height:360px;overflow-y:auto;padding-right:4px">
+<div style="margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid #2a2a2a"><strong style="color:#fff">v1.0.1</strong> <span style="color:#777;font-size:.78rem">(2026-11-27)</span><br>&bull; Added background sweep thread (every 60s) with thread-safe sweep lock so scheduled Jellyfin scans never leave blocked collections behind.<br>&bull; Fixed missing <code>threading</code> / <code>_retry_timer</code> crash in 5-minute health retest.<br>&bull; Added in-app Changelog modal and direct GitHub link in top bar.</div>
+<div><strong style="color:#fff">v1.0.0</strong> <span style="color:#777;font-size:.78rem">(2026-11-26)</span><br>&bull; Initial release: Jellyfin BoxSet blocking, <code>TmdbCollection</code> stripping, instant JSON restore snapshots, real-time webhook interception, health checks, and full-state export/import.</div>
+</div>
 </div>
 </div>
 <div id="about-modal" class="modal-bg" style="display:none" onclick="if(event.target===this){{aboutPage(1);toggleAbout()}}">
@@ -406,7 +423,7 @@ document.addEventListener("keydown",function(e){{
 <div class="card"><form method="POST" action="/add"><label for="selected">Select Existing Jellyfin Collection ({len(existing):,})</label><select id="selected" name="selected">{options}</select><input type="text" id="manual" name="manual" placeholder="Or type collection name manually to begin searching..." oninput="filterList()"><button type="submit" class="btn-primary">Block &amp; Clean</button></form></div>
 <div class="list-section"><div class="list-title">Blocked Collections ({total:,})</div>{rows}<div class="pagination"><a href="/?page={page-1}" class="{prev_cls}">&larr; Previous</a><span class="page-info">Page {page:,} of {total_pages:,}</span><a href="/?page={page+1}" class="{next_cls}">Next &rarr;</a></div></div>
 <script>
-if(window.location.search)window.history.replaceState(null,"","/");function toggleAbout(){{var m=document.getElementById("about-modal");m.style.display=m.style.display==="flex"?"none":"flex";}}function toggleSettings(){{const p=document.getElementById("settings-panel");p.style.display=p.style.display==="block"?"none":"block"}}
+if(window.location.search)window.history.replaceState(null,"","/");function toggleChangelog(){{var m=document.getElementById("cl-modal");m.style.display=m.style.display==="flex"?"none":"flex";}}function toggleAbout(){{var m=document.getElementById("about-modal");m.style.display=m.style.display==="flex"?"none":"flex";}}function toggleSettings(){{const p=document.getElementById("settings-panel");p.style.display=p.style.display==="block"?"none":"block"}}
 const ALL_OPTS=Array.from(document.getElementById("selected").options).slice(1).map(o=>({{v:o.value,t:o.text}}));
 function filterList(){{const q=document.getElementById("manual").value.toLowerCase();const s=document.getElementById("selected");const m=ALL_OPTS.filter(o=>o.t.toLowerCase().includes(q));s.innerHTML='<option value="">--- Choose a collection ---</option>'+m.map(o=>`<option value="${{o.v.replace(/"/g,"&quot;")}}">${{o.t}}</option>`).join("");if(q&&m.length===1)s.selectedIndex=1;}}
 </script>
@@ -531,6 +548,12 @@ function filterList(){{const q=document.getElementById("manual").value.toLowerCa
         self.send_header("Location", "/")
         self.end_headers()
 
+def _bg_loop():
+    while True:
+        time.sleep(60)
+        clean_collections()
+
 if __name__ == "__main__":
     clean_collections()
+    threading.Thread(target=_bg_loop, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 8099), Handler).serve_forever()
